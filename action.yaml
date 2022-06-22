@@ -1,0 +1,57 @@
+name: Push Helm Chart to GCS Bucket
+description: 'Push a packaged Helm Chart to a GCS Bucket based Repository.'
+author: Jordan Bigelow
+branding:
+  icon: anchor
+  color: blue
+
+inputs:
+  GCP_CREDENTIALS:
+    description: 'Service Account Credentials in JSON format that have been Base64 Encoded'
+    required: true
+  GCP_PROJECT_ID:
+    description: 'ID of Project that the GCS bucket is associated with'
+    required: true
+  GCP_BUCKET_NAME:
+    description: 'Name of Bucket in GCS'
+    required: true
+  PACKAGED_CHART_FOLDER:
+    description: 'Name of Folder Where Chart has been prepared and packaged'
+    required: false
+    default: './chart-packages'
+
+runs:
+  using: composite
+
+  steps:
+    - id: auth
+      uses: 'google-github-actions/auth@v0'
+      with:
+        credentials_json: ${{ inputs.GCP_CREDENTIALS }}
+        token_format: 'access_token'
+
+    - name: Set up Cloud SDK
+      uses: 'google-github-actions/setup-gcloud@v0'
+      with:
+        project_id: ${{ inputs.GCP_PROJECT_ID }}
+        export_default_credentials: true
+
+    - name: Install GCS Plugin
+      shell: bash
+      run: |
+        helm plugin install https://github.com/viglesiasce/helm-gcs.git --version v0.2.0
+
+    - name: Add Repo
+      shell: bash
+      env:
+        GCS_BUCKET: ${{ inputs.GCP_BUCKET_NAME }}
+      run: |
+        helm repo add gcs-repo gs://"$GCS_BUCKET"
+        
+    - name: Push Chart
+      shell: bash
+      env:
+        GCS_BUCKET: ${{ inputs.GCP_BUCKET_NAME }}
+        CHART_FOLDER: ${{ inputs.PACKAGED_CHART_FOLDER }}
+      run: |
+        helm gcs push "$CHART_FOLDER"/* gs://"$GCS_BUCKET"
